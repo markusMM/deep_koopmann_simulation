@@ -49,7 +49,7 @@ def calculate_divergence(u_field: np.ndarray, v_field: np.ndarray) -> np.ndarray
     du_dx = np.gradient(u_field, axis=2) / (GRID_RES)
     # Partial derivative dV/dY
     dv_dy = np.gradient(v_field, axis=1) / (GRID_RES) 
-    
+
     divergence = du_dx + dv_dy
     return divergence
 
