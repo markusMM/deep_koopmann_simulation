@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from scipy.linalg import pinv
+from torch.linalg import pinv
 from typing import Optional, Tuple
 import logging
 
@@ -22,40 +22,52 @@ class ClassicalKoopmanAnalysis:
         self.torch_tensors = return_torch_tensors
         self.losses = []
 
-    def fit(self, X: np.ndarray, Y: np.ndarray) -> "ClassicalKoopmanAnalysis":
+    def fit(
+        self, 
+        X: (np.ndarray|torch.Tensor), 
+        Y: (np.ndarray|torch.Tensor)
+    ) -> "ClassicalKoopmanAnalysis":
         """
         Calculates the Koopman operator K.
+
+        The Koopman operator K is found by `K = Y * X_pseudo_inverse`
+
+        Least-Squares is often preferred over direct pinv for stability, 
+        but pinv is conceptually clearer for :math:`K = Y X^+`
         
         Args:
-            X (np.ndarray): Current state matrix (T, State_Dim).
-            Y (np.ndarray): Next state matrix (T, State_Dim).
+            X (np.ndarray|torch.Tensor): Current state matrix (T, State_Dim).
+            Y (np.ndarray|torch.Tensor): Next state matrix (T, State_Dim).
             
         Returns:
             float: The reconstruction loss (Frobenius norm).
         """
         if X.shape[1] != self.state_dim or Y.shape[1] != self.state_dim:
             raise ValueError("Input dimensions must match the initialized state_dim.")
-            
-        # The Koopman operator K is found by K = Y * X_pseudo_inverse
-        # np.linalg.lstsq is often preferred over direct pinv for stability, 
-        # but pinv is conceptually clearer for K = Y X^+
+
+        if isinstance(X, np.ndarray):
+            X = torch.tensor(X)
+        if isinstance(Y, np.ndarray):
+            Y = torch.tensor(X)
         
         # Calculate the pseudo-inverse of X
-        X_pinv = pinv(X.T @ X) @ X.T # Equivalent to np.linalg.pinv(X) if not using full SVD
+        X_pinv = pinv(X.T @ X) @ X.T # Equivalent to linalg.pinv if not using full SVD
         
         # Koopman Operator K
         self.K = Y.T @ X_pinv.T
         
         # Calculate reconstruction loss
         Y_pred = X @ self.K.T  # type: ignore
-        loss = float(np.linalg.norm(Y - Y_pred, 'fro'))
+        loss = float(torch.linalg.norm(Y - Y_pred, 'fro'))
         self.losses.append(loss)
         
         logging.info(f"Classical Koopman fit complete. Operator K shape: {self.K.shape}, Loss: {loss:.4f}")  # type: ignore
         return self
 
     def predict(
-        self, x_t: np.ndarray, steps: int = 1
+        self, 
+        x_t: (np.ndarray|torch.Tensor), 
+        steps: int = 1
     ) -> (np.ndarray|torch.Tensor):
         """
         Forecasts the state using the learned Koopman operator.
@@ -70,7 +82,7 @@ class ClassicalKoopmanAnalysis:
         if self.K is None:
             raise RuntimeError("Model must be fitted before prediction.")
             
-        current_x = x_t.copy()
+        current_x = x_t
         forecasts = []
         
         for _ in range(steps):
@@ -79,8 +91,8 @@ class ClassicalKoopmanAnalysis:
             forecasts.append(next_x)
             current_x = next_x
 
-        forecasts = np.array(forecasts)
-        if self.torch_tensors:
-            forecasts = torch.tensor(forecasts)
+        forecasts = torch.tensor(forecasts)
+        if not self.torch_tensors:
+            forecasts = np.array(forecasts)
         
         return forecasts

@@ -1,6 +1,6 @@
 import numpy as np
 import xarray as xr
-from datasets.net_cfd import prepare_data_for_koopman, TARGET_VARIABLES
+from datasets.net_cfd import prepare_data_for_koopman, TARGET_FEATURES
 
 # spacial resolution
 GRID_RES = 0.1
@@ -66,7 +66,7 @@ def create_koopman_features(ds: xr.Dataset) -> np.ndarray:
     print("Creating CFD-based Koopman lifting features...")
     
     # 1. Base features (already flattened in net_cfd.py)
-    X_base = prepare_data_for_koopman(ds, TARGET_VARIABLES)
+    X_base = prepare_data_for_koopman(ds, TARGET_FEATURES)
     
     # 2. CFD features
     u = ds['wind_speed_u'].values
