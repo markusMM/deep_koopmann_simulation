@@ -25,12 +25,14 @@ def unzip_csv_or_nc_batch(
             base_name = zip_name.replace(repl_suffix, "")
 
         with zipfile.ZipFile(zip_path, "r") as z:
+            k = 0  # counter for multiple files
             for member in z.namelist():
                 # Only extract NetCDF or CSV
                 if member.endswith((".nc", ".csv")):
+                    k += 1
                     # Choose extension dynamically
                     ext = ".nc" if member.endswith(".nc") else ".csv"
-                    out_name = f"{base_name}{ext}"
+                    out_name = f"{base_name}_{k :2d}{ext}"
                     out_path = os.path.join(output_dir, out_name)
 
                     if os.path.exists(out_path) and not overwrite:
