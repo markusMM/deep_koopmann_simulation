@@ -6,8 +6,8 @@ import pytorch_lightning as pl
 from typing import Any, Dict, Tuple
 
 # Import Koopman components
-from models.km_classical import ClassicalKoopmanAnalysis
-from models.km_layers import KoopmanEncoder, KoopmanEvolutionLayer
+from algos.km_classical import ClassicalKoopmanAnalysis
+from algos.km_layers import KoopmanEncoder, KoopmanEvolutionLayer
 from datasets.km_dataset import ClassicalKoopmanDataset, DeepKoopmanDataset
 
 
