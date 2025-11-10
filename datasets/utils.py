@@ -1,6 +1,9 @@
 import os
+from typing import Iterable
 import zipfile
 import logging
+
+import pandas as pd
 
 
 # Folder containing your compressed ERA5 or CSV archives
@@ -43,3 +46,14 @@ def unzip_csv_or_nc_batch(
                         dst.write(src.read())
 
                     logging.info(f"Saved: {out_path}")
+
+
+def add_specification(
+    df: pd.DataFrame, 
+    specification: (float|int|str|Iterable), 
+    col_name: str = 'cluster'
+) -> pd.DataFrame:
+    if isinstance(specification, Iterable):
+        assert len(specification) == len(df)  # type: ignore
+    df[col_name] = specification
+    return df
