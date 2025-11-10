@@ -1,6 +1,11 @@
 import os
 import torch
 import configparser
+import multiprocessing as mp
+
+# %% default specifications
+
+NCPU = mp.cpu_count()
 
 # %% CFD init
 
@@ -75,3 +80,14 @@ else:
 
 # Helper function to move data to the appropriate device (CPU or GPU)
 DEVICE = torch.device(BCK_CFG.get('default', 'device'))
+
+# %% further EDA features ect
+
+era5_variables = {
+    "t2m":  "2m Temperature",
+    "msl":  "Mean Sea Level",
+    "skt":  "Skin Temperature",
+    "sp":   "Surface Pressure",
+    "ssrd": "Surface Solar Radiation Downwards",
+    "tp":   "Total Precipitation"
+}
