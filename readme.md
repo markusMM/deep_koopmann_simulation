@@ -1,4 +1,4 @@
-# Deep Koopman and HAVOC Optimization Toolkit
+# Deep Koopman and HAVOK Optimization Toolkit
 
 ## What is Koopman and what shall one even care about such another useless cryptic python library?
 
