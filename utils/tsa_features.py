@@ -5,9 +5,17 @@ import pywt
 import multiprocessing as mp
 import torch
 import torch.fft as fft
+from statsmodels.tsa.seasonal import seasonal_decompose
+from skopt.space import Integer
+from skopt import gp_minimize
+from common import era5_variables, NCPU
 
 
-def torch_cwt_batch(signals, scales, wavelet, fs=1.0) -> tuple[torch.Tensor, Any]:
+def torch_cwt_batch(
+    signals, wavelet="cmor1.5-1.0", 
+    scales=np.geomspace(1,512,32), 
+    fs=1.0
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Perform batched Continuous Wavelet Transform on several signals."""
     n = signals.shape[-1]
     freqs = torch.tensor(pywt.scale2frequency(wavelet, scales) / fs, dtype=torch.float32)
@@ -29,8 +37,8 @@ def torch_cwt_batch(signals, scales, wavelet, fs=1.0) -> tuple[torch.Tensor, Any
     dom_idx = avg_power.argmax(dim=-1)
     dom_freq = freqs[dom_idx]
     ent = - (avg_power/avg_power.sum(dim=-1, keepdim=True) * 
-            (avg_power/avg_power.sum(dim=-1, keepdim=True)+1e-12).log()).sum(dim=-1)
-    return dom_freq, ent
+            (avg_power/avg_power.sum(dim=-1, keepdim=True) + 1e-12).log()).sum(dim=-1)
+    return avg_power, dom_freq, ent, freqs
 
 
 def wavelet_features(series, wavelet="cmor1.5-1.0", scales=np.geomspace(1,512,32), fs=1.0):
@@ -105,3 +113,79 @@ def wavelet_feature_variables(
 def process_window(args) -> dict[str, Any]:
     data, start, window, fs = args
     return wavelet_features(data[start:start+window], fs=fs)
+
+
+def opt_decomp(
+    data: pd.DataFrame, 
+    variables: list[str] = list(era5_variables.keys()),
+    p_low: int = 18,
+    p_high: int = 24,
+    p_dt: int = 1,
+    gp_n_iter: int = 15
+) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
+    # Define search space — e.g., range of candidate periods 
+    # hourly → `days_low` days to `days_high` days 
+    periods = [Integer(
+        p_low, 
+        p_high, 
+        name="period"
+    )]
+    # Loop and plot results for each variable
+    results = []
+    for var in variables:
+        series = data[var].dropna()
+
+        # Define objective function to minimize residual error
+        def objective(period) -> (Any | float):
+            period = p_dt * period[0]
+            try:
+                result = seasonal_decompose(series, model="additive", period=int(period))
+                resid = result.resid.dropna()
+                # compute sum of squared residual
+                score = np.mean(resid.values ** 2)
+            except Exception as e:
+                err_tuple = f"\
+                    var: {var};  date-range:  {data['date'].min()} - {data['date'].max()}\n\
+                    lat: {data['lat'].values};  lon: {data['lon'].values}\
+                    period: {period}"
+                print(f'Cannot decompose {err_tuple} {e}')
+                score = 1000000  # invalid period or failed decomposition
+            return score
+
+        # Run Bayesian optimization
+        try:
+            res = gp_minimize(
+                objective,
+                dimensions=periods,
+                n_calls=gp_n_iter,
+                n_random_starts=4,
+                random_state=42,
+                n_jobs=NCPU
+            )
+        except Exception as e:
+            err_tuple = f"\
+                var: {var};  date-range:  {data['date'].min()} - {data['date'].max()}\n\
+                lat: {data['lat'].values};  lon: {data['lon'].values}"
+            print(f'Cannot decompose {err_tuple}: {e}')
+            
+
+        # parse "optimal" period
+        period = res.x[0]  # type: ignore
+        
+        # get final decomposition
+        result = seasonal_decompose(series, model="additive", period=period)
+
+        # overload decomposition
+        data[f'{var}_season'] = result.seasonal
+        data[f'{var}_trend'] = result.trend
+        data[f'{var}_resid'] = result.resid
+
+        results += [{
+            'time': data['time'].unique(),
+            'lon': data['lon'].unique()[0],
+            'lat': data['lat'].unique()[0],
+            'decomp': result,
+            'period': period
+        }]
+
+    return data, results
